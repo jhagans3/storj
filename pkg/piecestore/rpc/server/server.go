@@ -9,10 +9,15 @@ import (
 	"os"
 
 	"golang.org/x/net/context"
+	monkit "gopkg.in/spacemonkeygo/monkit.v2"
 
 	"storj.io/storj/pkg/piecestore"
 	"storj.io/storj/pkg/piecestore/rpc/server/ttl"
 	pb "storj.io/storj/protos/piecestore"
+)
+
+var (
+	mon = monkit.Package()
 )
 
 // OK - Success!
@@ -37,7 +42,9 @@ func cleanup(s *Server, id string) error {
 }
 
 // Store -- Store incoming data using piecestore
-func (s *Server) Store(stream pb.PieceStoreRoutes_StoreServer) error {
+func (s *Server) Store(stream pb.PieceStoreRoutes_StoreServer) (err error) {
+	defer mon.Task()(nil)(&err)
+
 	log.Println("Storing data...")
 
 	// Receive initial meta data about what's being stored
@@ -79,7 +86,9 @@ func (s *Server) Store(stream pb.PieceStoreRoutes_StoreServer) error {
 }
 
 // Retrieve -- Retrieve data from piecestore and send to client
-func (s *Server) Retrieve(pieceMeta *pb.PieceRetrieval, stream pb.PieceStoreRoutes_RetrieveServer) error {
+func (s *Server) Retrieve(pieceMeta *pb.PieceRetrieval, stream pb.PieceStoreRoutes_RetrieveServer) (err error) {
+	defer mon.Task()(nil)(&err)
+
 	log.Println("Retrieving data...")
 
 	path, err := pstore.PathByID(pieceMeta.Id, s.PieceStoreDir)
@@ -117,7 +126,8 @@ func (s *Server) Retrieve(pieceMeta *pb.PieceRetrieval, stream pb.PieceStoreRout
 }
 
 // Piece -- Send meta data about a stored by by Id
-func (s *Server) Piece(ctx context.Context, in *pb.PieceId) (*pb.PieceSummary, error) {
+func (s *Server) Piece(ctx context.Context, in *pb.PieceId) (rv *pb.PieceSummary, err error) {
+	defer mon.Task()(nil)(&err)
 	log.Println("Getting Meta data...")
 
 	path, err := pstore.PathByID(in.Id, s.PieceStoreDir)
@@ -141,7 +151,8 @@ func (s *Server) Piece(ctx context.Context, in *pb.PieceId) (*pb.PieceSummary, e
 }
 
 // Delete -- Delete data by Id from piecestore
-func (s *Server) Delete(ctx context.Context, in *pb.PieceDelete) (*pb.PieceDeleteSummary, error) {
+func (s *Server) Delete(ctx context.Context, in *pb.PieceDelete) (rv *pb.PieceDeleteSummary, err error) {
+	defer mon.Task()(nil)(&err)
 	log.Println("Deleting data...")
 
 	if err := cleanup(s, in.Id); err != nil {
