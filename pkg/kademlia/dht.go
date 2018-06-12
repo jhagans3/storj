@@ -12,8 +12,13 @@ import (
 
 	bkad "github.com/coyle/kademlia"
 	"github.com/zeebo/errs"
+	monkit "gopkg.in/spacemonkeygo/monkit.v2"
 
 	proto "storj.io/storj/protos/overlay"
+)
+
+var (
+	mon = monkit.Package()
 )
 
 // NodeErr is the class for all errors pertaining to node operations
@@ -33,7 +38,8 @@ type Kademlia struct {
 }
 
 // NewKademlia returns a newly configured Kademlia instance
-func NewKademlia(bootstrapNodes []proto.Node, ip string, port string) (*Kademlia, error) {
+func NewKademlia(bootstrapNodes []proto.Node, ip string, port string) (rv *Kademlia, err error) {
+	defer mon.Task()(nil)(&err)
 	bb, err := convertProtoNodes(bootstrapNodes)
 	if err != nil {
 		return nil, err
@@ -70,7 +76,8 @@ func NewKademlia(bootstrapNodes []proto.Node, ip string, port string) (*Kademlia
 }
 
 // GetNodes returns all nodes from a starting node up to a maximum limit stored in the local routing table
-func (k Kademlia) GetNodes(ctx context.Context, start string, limit int) ([]*proto.Node, error) {
+func (k Kademlia) GetNodes(ctx context.Context, start string, limit int) (rv []*proto.Node, err error) {
+	defer mon.Task()(&ctx)(&err)
 	if start == "" {
 		start = k.dht.GetSelfID()
 	}
@@ -83,7 +90,8 @@ func (k Kademlia) GetNodes(ctx context.Context, start string, limit int) ([]*pro
 }
 
 // GetRoutingTable provides the routing table for the Kademlia DHT
-func (k *Kademlia) GetRoutingTable(ctx context.Context) (RoutingTable, error) {
+func (k *Kademlia) GetRoutingTable(ctx context.Context) (rt RoutingTable, err error) {
+	defer mon.Task()(&ctx)(&err)
 	return RouteTable{
 		ht:  k.dht.HT,
 		dht: k.dht,
@@ -92,12 +100,14 @@ func (k *Kademlia) GetRoutingTable(ctx context.Context) (RoutingTable, error) {
 
 // Bootstrap contacts one of a set of pre defined trusted nodes on the network and
 // begins populating the local Kademlia node
-func (k *Kademlia) Bootstrap(ctx context.Context) error {
+func (k *Kademlia) Bootstrap(ctx context.Context) (err error) {
+	defer mon.Task()(&ctx)(&err)
 	return k.dht.Bootstrap()
 }
 
 // Ping checks that the provided node is still accessible on the network
-func (k *Kademlia) Ping(ctx context.Context, node proto.Node) (proto.Node, error) {
+func (k *Kademlia) Ping(ctx context.Context, node proto.Node) (rv proto.Node, err error) {
+	defer mon.Task()(&ctx)(&err)
 	n, err := convertProtoNode(node)
 	if err != nil {
 		return proto.Node{}, err
@@ -115,7 +125,8 @@ func (k *Kademlia) Ping(ctx context.Context, node proto.Node) (proto.Node, error
 
 // FindNode looks up the provided NodeID first in the local Node, and if it is not found
 // begins searching the network for the NodeID. Returns and error if node was not found
-func (k *Kademlia) FindNode(ctx context.Context, ID NodeID) (proto.Node, error) {
+func (k *Kademlia) FindNode(ctx context.Context, ID NodeID) (rv proto.Node, err error) {
+	defer mon.Task()(&ctx)(&err)
 	nodes, err := k.dht.FindNode([]byte(ID))
 	if err != nil {
 		return proto.Node{}, err
@@ -135,7 +146,8 @@ func (k *Kademlia) FindNode(ctx context.Context, ID NodeID) (proto.Node, error) 
 }
 
 // ListenAndServe connects the kademlia node to the network and listens for incoming requests
-func (k *Kademlia) ListenAndServe() error {
+func (k *Kademlia) ListenAndServe() (err error) {
+	defer mon.Task()(nil)(&err)
 	if err := k.dht.CreateSocket(); err != nil {
 		return err
 	}

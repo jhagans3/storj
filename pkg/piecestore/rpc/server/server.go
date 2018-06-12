@@ -9,10 +9,15 @@ import (
 	"os"
 
 	"golang.org/x/net/context"
+	monkit "gopkg.in/spacemonkeygo/monkit.v2"
 
 	"storj.io/storj/pkg/piecestore"
 	"storj.io/storj/pkg/piecestore/rpc/server/ttl"
 	pb "storj.io/storj/protos/piecestore"
+)
+
+var (
+	mon = monkit.Package()
 )
 
 // OK - Success!
@@ -24,8 +29,22 @@ type Server struct {
 	DB            *ttl.TTL
 }
 
+func cleanup(s *Server, id string) error {
+	if err := pstore.Delete(id, s.PieceStoreDir); err != nil {
+		return err
+	}
+
+	if err := s.DB.DeleteTTLByID(id); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Store -- Store incoming data using piecestore
-func (s *Server) Store(stream pb.PieceStoreRoutes_StoreServer) error {
+func (s *Server) Store(stream pb.PieceStoreRoutes_StoreServer) (err error) {
+	defer mon.Task()(nil)(&err)
+
 	log.Println("Storing data...")
 
 	// Receive initial meta data about what's being stored
@@ -43,6 +62,10 @@ func (s *Server) Store(stream pb.PieceStoreRoutes_StoreServer) error {
 	// Initialize file for storing data
 	storeFile, err := pstore.StoreWriter(piece.Id, s.PieceStoreDir)
 	if err != nil {
+		if err := cleanup(s, piece.Id); err != nil {
+			log.Printf("Failed on cleanup in Store: %s", err.Error())
+		}
+
 		return err
 	}
 	defer storeFile.Close()
@@ -50,6 +73,10 @@ func (s *Server) Store(stream pb.PieceStoreRoutes_StoreServer) error {
 	reader := NewStreamReader(stream)
 	total, err := io.Copy(storeFile, reader)
 	if err != nil {
+		if err := cleanup(s, piece.Id); err != nil {
+			log.Printf("Failed on cleanup in Store: %s", err.Error())
+		}
+
 		return err
 	}
 
@@ -59,7 +86,9 @@ func (s *Server) Store(stream pb.PieceStoreRoutes_StoreServer) error {
 }
 
 // Retrieve -- Retrieve data from piecestore and send to client
-func (s *Server) Retrieve(pieceMeta *pb.PieceRetrieval, stream pb.PieceStoreRoutes_RetrieveServer) error {
+func (s *Server) Retrieve(pieceMeta *pb.PieceRetrieval, stream pb.PieceStoreRoutes_RetrieveServer) (err error) {
+	defer mon.Task()(nil)(&err)
+
 	log.Println("Retrieving data...")
 
 	path, err := pstore.PathByID(pieceMeta.Id, s.PieceStoreDir)
@@ -97,7 +126,8 @@ func (s *Server) Retrieve(pieceMeta *pb.PieceRetrieval, stream pb.PieceStoreRout
 }
 
 // Piece -- Send meta data about a stored by by Id
-func (s *Server) Piece(ctx context.Context, in *pb.PieceId) (*pb.PieceSummary, error) {
+func (s *Server) Piece(ctx context.Context, in *pb.PieceId) (rv *pb.PieceSummary, err error) {
+	defer mon.Task()(nil)(&err)
 	log.Println("Getting Meta data...")
 
 	path, err := pstore.PathByID(in.Id, s.PieceStoreDir)
@@ -121,14 +151,11 @@ func (s *Server) Piece(ctx context.Context, in *pb.PieceId) (*pb.PieceSummary, e
 }
 
 // Delete -- Delete data by Id from piecestore
-func (s *Server) Delete(ctx context.Context, in *pb.PieceDelete) (*pb.PieceDeleteSummary, error) {
+func (s *Server) Delete(ctx context.Context, in *pb.PieceDelete) (rv *pb.PieceDeleteSummary, err error) {
+	defer mon.Task()(nil)(&err)
 	log.Println("Deleting data...")
 
-	if err := pstore.Delete(in.Id, s.PieceStoreDir); err != nil {
-		return nil, err
-	}
-
-	if err := s.DB.DeleteTTLByID(in.Id); err != nil {
+	if err := cleanup(s, in.Id); err != nil {
 		return nil, err
 	}
 

@@ -5,13 +5,14 @@ package pstore
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 
+	"github.com/mr-tron/base58/base58"
 	"github.com/zeebo/errs"
+	monkit "gopkg.in/spacemonkeygo/monkit.v2"
 
 	"storj.io/storj/pkg/ranger"
 )
@@ -23,10 +24,14 @@ const IDLength = 20
 var (
 	ArgError = errs.Class("argError")
 	FSError  = errs.Class("fsError")
+
+	mon = monkit.Package()
 )
 
 // PathByID creates datapath from id and dir
-func PathByID(id, dir string) (string, error) {
+func PathByID(id, dir string) (rv string, err error) {
+	defer mon.Task()(nil)(&err)
+
 	if len(id) < IDLength {
 		return "", ArgError.New("Invalid id length")
 	}
@@ -50,14 +55,16 @@ func DetermineID() string {
 		panic(err)
 	}
 
-	return base64.URLEncoding.EncodeToString(b)
+	return base58.Encode(b)
 }
 
 // StoreWriter stores data into piece store in multiple writes
 // 	id is the id of the data to be stored
 // 	dir is the pstore directory containing all other data stored
 // 	returns error if failed and nil if successful
-func StoreWriter(id string, dir string) (io.WriteCloser, error) {
+func StoreWriter(id string, dir string) (rv io.WriteCloser, err error) {
+	defer mon.Task()(nil)(&err)
+
 	dataPath, err := PathByID(id, dir)
 	if err != nil {
 		return nil, err
@@ -78,7 +85,9 @@ func StoreWriter(id string, dir string) (io.WriteCloser, error) {
 //	length is the amount of data to read. Read all data if -1
 //	dir is the pstore directory containing all other data stored
 // 	returns error if failed and nil if successful
-func RetrieveReader(id string, offset int64, length int64, dir string) (io.ReadCloser, error) {
+func RetrieveReader(id string, offset int64, length int64, dir string) (rv io.ReadCloser, err error) {
+	defer mon.Task()(nil)(&err)
+
 	dataPath, err := PathByID(id, dir)
 	if err != nil {
 		return nil, err
@@ -122,7 +131,9 @@ func RetrieveReader(id string, offset int64, length int64, dir string) (io.ReadC
 //	id is the id of the data to be stored
 //	dir is the pstore directory containing all other data stored
 //	returns error if failed and nil if successful
-func Delete(id string, dir string) error {
+func Delete(id string, dir string) (err error) {
+	defer mon.Task()(nil)(&err)
+
 	dataPath, err := PathByID(id, dir)
 	if err != nil {
 		return err
