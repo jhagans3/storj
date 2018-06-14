@@ -1,0 +1,81 @@
+// Copyright (C) 2018 Storj Labs, Inc.
+// See LICENSE for copying information.
+
+syntax = "proto3";
+package nodereputation;
+
+service NodeReputation {
+    rpc GetNodeReputation(Constraints) returns (NodeReputationRecords) {}
+    rpc LookUpNodeReputation(NodeID) returns (NodeReputationRecord) {}
+    rpc UpdateNodeReputation(NodeUpdate) returns (UpdateReply) {}
+}
+
+message NodeReputationRecord {
+    string nodeName = 1;
+	string timestamp = 2;
+	int64 uptime = 3;
+	int64 auditSuccess = 4;
+	int64 auditFail = 5;
+	int64 latency = 6;
+	int64 amountOfDataStored = 7;
+	int64 falseClaims = 8;
+    int64 shardsModified = 9;
+}
+
+message NodeReputationRecords {
+    repeated NodeReputationRecord records = 1;
+}
+
+message UpdateReply {
+    string bridgeName = 1;
+    string nodeName = 2;
+
+    enum ReplyType {
+        UPDATE_SUCCESS = 0;
+        UPDATE_FAILED = 1;
+    }
+
+    ReplyType status = 3;
+}
+
+message NodeID {
+    string nodeName = 1;
+}
+
+message NodeUpdate {
+    string nodeName = 1;
+    ColumnName columnName = 2;
+    string columnValue = 3;
+}
+
+message NodeReputationConstraint {
+    ColumnName columnName = 1;
+
+    enum Operand {
+        EQUAL_TO = 0;
+        GREATER_THAN = 1;
+        GREATER_THAN_EQUAL_TO = 2;
+        LESS_THAN = 3;
+        LESS_THAN_EQUAL_TO = 4;
+        NOT_EQUAL_TO = 5;
+    }
+
+    Operand operand = 2;
+    string columnValue = 3;
+}
+
+message Constraints {
+    repeated NodeReputationConstraint constraints = 1;
+}
+
+enum ColumnName {
+	node_name = 0;
+    uptime = 1;
+    timestamp = 2;
+	audit_success = 3;
+	audit_fail = 4;
+	latency = 5;
+	amount_of_data_stored = 6;
+	false_claims = 7;
+	shards_modified = 8;
+}
