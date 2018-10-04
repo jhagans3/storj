@@ -1,14 +1,21 @@
 // Copyright (C) 2018 Storj Labs, Inc.
 // See LICENSE for copying information.
 
-package jobs
+package repeatjobs
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"storj.io/storj/pkg/datarepair/checker"
+	"storj.io/storj/pkg/datarepair/repairer"
 	"storj.io/storj/pkg/repeat"
+)
+
+var (
+	ctx = context.Background()
 )
 
 type inc struct {
@@ -101,4 +108,80 @@ func TestUpAndDown(t *testing.T) {
 	repeat.Repeat(jobs, errors)
 	assert.Equal(t, "10", add.State())
 	assert.Equal(t, "0", sub.State())
+}
+
+type checkerJob struct {
+	id  string
+	num int
+}
+
+func (c *checkerJob) Name() string {
+	return c.id
+}
+func (c *checkerJob) State() string {
+	return fmt.Sprintf("%v", c.num)
+}
+func (c *checkerJob) Repeat() (bool, error) {
+	// operation
+	conf := checker.Config{}
+	conf.Run(ctx)
+	c.num = c.num + 1
+	// termination condition
+	if c.num > 5 {
+		return false, nil
+	}
+	return true, nil
+
+}
+
+func TestChecker(t *testing.T) {
+	var check = checkerJob{
+		id:  "Shard Checker",
+		num: 0,
+	}
+
+	errors := []string{}
+	jobs := []repeat.Repeater{&check}
+	repeat.Repeat(jobs, errors)
+	assert.Equal(t, 6, check.num)
+
+}
+
+type repairJob struct {
+	id  string
+	num int
+}
+
+func (r *repairJob) Name() string {
+	return r.id
+}
+func (r *repairJob) State() string {
+	return fmt.Sprintf("%v", r.num)
+}
+func (r *repairJob) Repeat() (bool, error) {
+	// operation
+	conf := repairer.Config{
+		// maxRepair: 100,
+	}
+	conf.Run(ctx)
+	r.num = r.num + 1
+	// termination condition
+	if r.num > 5 {
+		return false, nil
+	}
+	return true, nil
+
+}
+
+func TestRepair(t *testing.T) {
+	var repair = checkerJob{
+		id:  "Shard Repair",
+		num: 0,
+	}
+
+	errors := []string{}
+	jobs := []repeat.Repeater{&repair}
+	repeat.Repeat(jobs, errors)
+	assert.Equal(t, 6, repair.num)
+
 }
